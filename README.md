@@ -61,8 +61,9 @@ int main(void)
 ```
 
 In this example, the memory pool is initialized once, and then used to allocate space first for an array of 5 integers and later for a 5-byte string. 
-It’s important to understand that, in the first allocation, we use 20 bytes (on my machine, where sizeof(int) is 4 bytes) for the array of integers. 
-With pool_free(), we effectively zero out those 20 bytes, making that memory available again. 
+It’s important to understand that, in the first allocation, we use 20 bytes (on my machine, where `sizeof(int)` is 4 bytes) for the array of integers. 
+With `pool_free()`, we effectively zero out those 20 bytes, making that memory available again. 
 We then reuse it for our string "ciao" (which occupies the first 5 bytes of those 40). This demonstrates how we can use the same memory multiple times for different data types, relying on a single malloc call during pool_init(). 
-After each allocation is used (e.g., printing the integers or the string), pool_free() returns the memory to the pool, making it available for reuse. 
-This showcases the efficiency of a memory pool: rather than relying on the system's heap management for every allocation, you manage a single block and reuse it flexibly. Finally, pool_destroy() ensures all resources are properly released when the program ends.
+After each allocation is used (e.g., printing the integers or the string), `pool_free()` returns the memory to the pool, making it available for reuse. 
+This showcases the efficiency of a memory pool: rather than relying on the system's heap management for every allocation, you manage a single block and reuse it flexibly. 
+Finally, `pool_destroy()` ensures all resources are properly released when the program ends.
