@@ -67,3 +67,5 @@ We then reuse it for our string "ciao" (which occupies the first 5 bytes of thos
 After each allocation is used (e.g., printing the integers or the string), `pool_free()` returns the memory to the pool, making it available for reuse. 
 This showcases the efficiency of a memory pool: rather than relying on the system's heap management for every allocation, you manage a single block and reuse it flexibly. 
 Finally, `pool_destroy()` ensures all resources are properly released when the program ends.
+
+the types that you can use are defined in `mem_pool.h` along with the struct that emplement the very pool.
