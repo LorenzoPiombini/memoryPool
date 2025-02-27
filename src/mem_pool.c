@@ -2,11 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdalign.h>
 #include "mem_pool.h"
 
 static int is_align(void *ptr, size_t alignment);
 static uintptr_t align(uintptr_t address, size_t alignment);
-
 
 void pool_free(void **ptr, size_t size, struct m_pool *pool)
 {
@@ -18,9 +18,12 @@ void pool_free(void **ptr, size_t size, struct m_pool *pool)
 	
 	if(size == 0) return;
 
+
+
 	memset(*ptr,0,size);
 	(*pool).allocated -= size;
 	(*pool).m_free += size;
+
 	*ptr = NULL;		
 }
 
@@ -42,30 +45,32 @@ int pool_init(struct m_pool *pool)
 }
 
 /*size mean sizeof(type) * the type you want*/
-int pool_alloc(struct m_pool *pool, void **ptr, size_t size, enum type t)
+int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type t)
 {
 	if(!pool) return -1;
 
 	if(size > CHUNK_SIZE) return -1;
 
 	if(((*pool).m_free) < size) return -1;
-
 	
+
 	switch(t){
 	case i32:
 	{
 		/* move along the chunk */
+		/* this give you the first avaiable address */
 		*ptr = (int*)((char*)(*pool).chunk + (*pool).allocated);
+		
 		if(!is_align(*ptr,sizeof(int))){
-			uintptr_t addr =  align((uintptr_t)ptr,(sizeof(int)));
-			if(addr > (uintptr_t)((char*)(*pool).chunk + (CHUNK_SIZE - 1))) {
+			uintptr_t addr =  align((uintptr_t)*ptr,(sizeof(int)));
+			if(addr > (uintptr_t)((char*)(*pool).chunk + (CHUNK_SIZE - 1)))
 				return -1;/*you should look for space along the chunk*/
-			}
+
 			*ptr = (void*)addr;
 		}
 
-		(*pool).allocated += size;
-		(*pool).m_free -= size;
+		(*pool).allocated += (size * items);
+		(*pool).m_free -= (size * items);
 		return 0;
 	}
 	case i64:
@@ -73,29 +78,48 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size, enum type t)
 		/* move along the chunk */
 		*ptr = (long*)((char*)(*pool).chunk + (*pool).allocated);
 		if(!is_align(*ptr,(sizeof(long)))){
-			uintptr_t addr =  align((uintptr_t)ptr,(sizeof(long)));
-			if(addr > CHUNK_SIZE)
+			uintptr_t addr =  align((uintptr_t)*ptr,(sizeof(long)));
+			if(addr > (uintptr_t)((char*)(*pool).chunk + (CHUNK_SIZE - 1)))
 				return -1;/*you should look for space along the chunk*/
-			
+
 			*ptr = (void*)addr;
 		}
-		(*pool).allocated += size;
-		(*pool).m_free -= size;
+		(*pool).allocated += (size * items);
+		(*pool).m_free -= (size * items);
 		return 0;
 	}
 	case s:
 	{
 		/*move along the chunk */
+
 		*ptr = (char*)(*pool).chunk + (*pool).allocated;
 		if(!is_align(*ptr,sizeof(char))){
-			uintptr_t addr =  align((uintptr_t)ptr,(sizeof(char)));
-			if(addr > CHUNK_SIZE)
+			uintptr_t addr =  align((uintptr_t)*ptr,(sizeof(char)));
+			if(addr > (uintptr_t)((char*)(*pool).chunk + (CHUNK_SIZE - 1)))
 				return -1;/*you should look for space along the chunk*/
 			
 			*ptr = (void*)addr;
 		}
-		(*pool).allocated += size;
-		(*pool).m_free -= size;
+		(*pool).allocated += (size * items);
+		(*pool).m_free -= (size * items);
+		return 0;
+	}
+	case ud:
+	{
+		*ptr = (void*)(char*)(*pool).chunk + (*pool).allocated;
+
+		if(!is_align(*ptr,size)) {
+			uintptr_t addr =  align((uintptr_t)*ptr, size);
+			if(addr > (uintptr_t)((char*)(*pool).chunk + (CHUNK_SIZE - 1)))
+				return -1;/*you should look for space along the chunk*/
+			
+			*ptr = (void*)addr;
+		} else {
+			*ptr = (char*)(*pool).chunk + (*pool).allocated;
+		}
+
+		(*pool).allocated += (size * items);
+		(*pool).m_free -= (size * items);
 		return 0;
 	}
 	default:
@@ -103,7 +127,7 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size, enum type t)
 		return -1;
 	}		
 	
-	return 1;	
+	return 0;	
 }
 
 void pool_destroy(struct m_pool *pool)
@@ -122,3 +146,5 @@ static uintptr_t align(uintptr_t address, size_t alignment)
 {
 	return (uintptr_t)((address + (alignment - 1)) & ~(alignment - 1));
 }
+
+

@@ -2,6 +2,11 @@
 #include <string.h>
 #include "mem_pool.h"
 
+struct My_struct{
+	int num;
+	char s[2];
+};
+
 
 int main(void)
 {
@@ -17,7 +22,7 @@ int main(void)
 
 	/* Allocate memory for an array of 5 integers */
 	int *ptr = NULL;
-	if(pool_alloc(&pool,(void**)&ptr, 5*sizeof(int), i32) == -1){
+	if(pool_alloc(&pool,(void**)&ptr, sizeof(int),5, i32) == -1){
 		fprintf(stderr,"can't allocate memory.\n");
 		pool_destroy(&pool);
 		return -1;
@@ -29,24 +34,44 @@ int main(void)
 
 	/* print the data  */
 	for(int i = 0; i < 5; i++)
-		printf("int a index %d in the array is: %d\n",i,ptr[i]);
+		printf("int a index %d in the array is: %d, address: %p.\n",i,ptr[i],(void*)&ptr[i]);
 
 
 
-	pool_free((void**)&ptr,5*sizeof(int),&pool);
 
-	/*now we can reuse the memory with other data*/
+	/*assign a string of 5 chars*/
 	char *str = NULL;
-	if(pool_alloc(&pool,(void**)&str, 5 * sizeof(char), i32) == -1){
-		fprintf(stderr,"memory pool init failed.\n");
+	if(pool_alloc(&pool,(void**)&str,sizeof(char),7, s) == -1){
+		fprintf(stderr,"can't allocate memory.\n");
 		pool_destroy(&pool);
 		return -1;
 	}
 
-	strncpy(str,"ciao",5);
-	printf("we allocated a string of 5 bytes: %s\n",str);
+	strncpy(str,"ciao!!",7);
+	printf("we allocated a string of 7 bytes: %s\nfirst addres of string is %p.\n",str,(void*)&str[0]); 
 	
-	pool_free((void**)&ptr,5 * sizeof(char),&pool);
+	/*allocate memory for the struct My_struct*/
+	struct My_struct *data = NULL;
+	if(pool_alloc(&pool, (void**)&data,sizeof(struct My_struct),1,ud) == -1 ){
+		fprintf(stderr,"can't allocate memory.\n");
+		pool_destroy(&pool);
+		return -1;
+	}
+	
+	data->num = 15;
+	data->s[0] = 'h';
+	data->s[1] = '\0';
+
+	printf("first address of struct %p.\n"\
+			"first int address %p\n"\
+			"value of integer %d\n"\
+			"first address of char array %p.\n"\
+			"value of char %c"
+			,data,(void*)&data->num,data->num,(void*)&data->s[0],data->s[0]);
+
+	pool_free((void**)&str,5 * sizeof(char),&pool);
+	pool_free((void**)&ptr,5 * sizeof(int),&pool);
+	pool_free((void**)&data,1 * sizeof(struct My_struct),&pool);
 
 	pool_destroy(&pool);
 	return 0;
