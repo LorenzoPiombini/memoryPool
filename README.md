@@ -86,10 +86,11 @@ int main(void)
 In this example, the memory pool is initialized once, and its base and top addresses are printed to show the range of the allocated block. 
 Then, it’s used to allocate space first for an array of 5 integers (20 bytes on a system where sizeof(int) is 4), then for a 7-byte string "ciao!!", and finally for a custom struct My_struct containing an integer and a 2-char array. 
 The program assigns values to each allocation and prints them along with their memory addresses, showing how the memory is laid out within the pool. 
-This demonstrates how the same 1024-byte block can be reused for different data types—integers, strings, and structs—with a single malloc call during pool_init(). 
+This demonstrates how the same 1MB block can be reused for different data types—integers, strings, and structs—with a single malloc call during 'pool_init()'. 
 After each allocation is used, pool_free() returns the memory to the pool, making it available for reuse, though in this example, we free everything at the end before calling pool_destroy() to release all resources.
 This showcases the efficiency of a memory pool: rather than relying on the system’s heap management for every allocation, you manage a single block and reuse it flexibly.
-Memory Alignment in the Pool
+
+# Memory Alignment in the Pool
 A critical aspect of memory management, especially in a memory pool, is ensuring proper alignment of allocated memory. 
 Alignment refers to positioning data in memory at addresses that are multiples of a specific value (e.g., 4, 8, or 16 bytes), which is often required by hardware or optimizes access speed. 
 Misaligned memory can lead to performance penalties or even crashes on some architectures. 
@@ -126,7 +127,7 @@ For instance, integers typically require 4-byte alignment on many systems, and s
 This ensures the memory pool is both efficient and safe for diverse data types, preventing alignment-related issues while reusing the same block.
 The types that you can use (e.g., i32, s, ud) are defined in 'mem_pool.h', along with the struct 'm_pool' that implements the memory pool itself.
 
-#Example Output
+# Example Output
 Here’s the output from running the main.c program on a sample system (addresses will vary by system and run):
 
 ```plain text
