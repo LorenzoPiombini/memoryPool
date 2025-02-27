@@ -2,7 +2,7 @@
 #define _MEM_POOL_H
 
 
-#define CHUNK_SIZE 1024
+#define CHUNK_SIZE 1048576 
 
 enum type{
 	i32,
@@ -12,8 +12,10 @@ enum type{
 
 struct m_pool{
 	void* chunk;
+	void* base_address;
+	void* top_address;
 	size_t m_free;
-	size_t allocated; 
+	size_t allocated;
 };
 
 

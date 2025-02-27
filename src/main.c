@@ -12,10 +12,13 @@ int main(void)
 		return -1;
 	}
 
+	printf("base address is %p\n", (void*)pool.base_address);
+	printf("top address is %p\n", (void*)pool.top_address);
+
 	/* Allocate memory for an array of 5 integers */
 	int *ptr = NULL;
 	if(pool_alloc(&pool,(void**)&ptr, 5*sizeof(int), i32) == -1){
-		fprintf(stderr,"memory pool init failed.\n");
+		fprintf(stderr,"can't allocate memory.\n");
 		pool_destroy(&pool);
 		return -1;
 	}

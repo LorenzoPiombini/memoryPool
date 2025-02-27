@@ -22,4 +22,4 @@ $(TARGET) : $(OBJ)
 
 
 obj/%.o : src/%.c
-	gcc -Wall -Wextra -c $< -o $@ -Iinclude 
+	gcc -g3 -Wall -Wextra -c $< -o $@ -Iinclude 
