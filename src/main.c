@@ -48,7 +48,7 @@ int main(void)
 	}
 
 	strncpy(str,"ciao!!",7);
-	printf("we allocated a string of 7 bytes: %s\nfirst addres of string is %p.\n",str,(void*)&str[0]); 
+	printf("\n\n\nwe allocated a string of 7 bytes: %s\nfirst addres of string is %p.\n",str,(void*)&str[0]); 
 	
 	/*allocate memory for the struct My_struct*/
 	struct My_struct *data = NULL;
@@ -62,7 +62,7 @@ int main(void)
 	data->s[0] = 'h';
 	data->s[1] = '\0';
 
-	printf("first address of struct %p.\n"\
+	printf("\n\n\nfirst address of struct %p.\n"\
 			"first int address %p\n"\
 			"value of integer %d\n"\
 			"first address of char array %p.\n"\

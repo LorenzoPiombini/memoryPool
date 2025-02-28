@@ -1,7 +1,6 @@
 #ifndef _MEM_POOL_H
 #define _MEM_POOL_H
 
-#include <stdalign.h>
 
 #define CHUNK_SIZE 1048576 
 
@@ -24,18 +23,36 @@ struct m_pool{
 	size_t allocated;
 };
 
-struct free_block_list{
+
+struct free_blocks{
 	void* block_start;
 	size_t size;
 	struct free_block_list *next;
 };
 
-extern struct free_block_list free_list;
+
+struct allocated_blocks{
+	void *block_start;
+	size_t size;
+	struct allocated_block *next;
+};
+
+struct Meta_data{
+	struct allocated_block;
+	struct free_blocks;
+
+};
+
+/* I might need extern variables */
 
 void pool_free(void **ptr, size_t size, struct m_pool *pool);
 void pool_destroy(struct m_pool *pool);
 int pool_init(struct m_pool *pool);
 int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type t);
+/*TODO implement the realloc :
+ * needs a struct to keep track of block size*/
+int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items, enum type t);
+
 
 
 

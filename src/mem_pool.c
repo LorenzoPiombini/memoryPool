@@ -44,7 +44,6 @@ int pool_init(struct m_pool *pool)
 	return 0;
 }
 
-/*size mean sizeof(type) * the type you want*/
 int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type t)
 {
 	if(!pool) return -1;
