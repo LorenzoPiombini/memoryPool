@@ -5,6 +5,11 @@
 #include <stdalign.h>
 #include "mem_pool.h"
 
+
+/* meta deta from the memory pool */
+struct Meta_data memory_blocks = {0};
+
+
 static int is_align(void *ptr, size_t alignment);
 static uintptr_t align(uintptr_t address, size_t alignment);
 
@@ -30,7 +35,8 @@ void pool_free(void **ptr, size_t size, struct m_pool *pool)
 int pool_init(struct m_pool *pool)
 {
 	(*pool).chunk = (void*) malloc(CHUNK_SIZE);
-	if(!(*pool).chunk){
+	(*pool).internal_memory = (void*) malloc(CHUNK_SIZE);
+	if(!(*pool).chunk || !(*pool).internal_memory){
 		fprintf(stderr,"%s() failed.\n",__func__);
 		return -1;
 	}
@@ -46,11 +52,9 @@ int pool_init(struct m_pool *pool)
 
 int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type t)
 {
-	if(!pool) return -1;
-
-	if(size > CHUNK_SIZE) return -1;
-
-	if(((*pool).m_free) < size) return -1;
+	if((!pool) || 
+		( size > CHUNK_SIZE ) || 
+		(((*pool).m_free) < size)) return -1;
 	
 
 	switch(t){
@@ -70,6 +74,40 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 
 		(*pool).allocated += (size * items);
 		(*pool).m_free -= (size * items);
+		
+		if(!memory_blocks.al_blocks) {	
+			if(pool_alloc(pool,(void **)&memory_blocks.al_blocks,
+						sizeof(struct allocated_blocks),1,internal) == -1) {
+				fprintf(stderr,"can't alloc internal memory.\n");
+				return -1;
+			}
+
+			(memory_blocks.al_blocks)->block_start = *ptr;
+			(memory_blocks.al_blocks)->size = (size * items);
+			(memory_blocks.al_blocks)->next = NULL;
+
+		}else {
+
+			struct allocated_blocks *temp = memory_blocks.al_blocks;
+			if(!temp)
+				memory_blocks.al_blocks->next = temp; 
+
+			while(temp->next){
+				memory_blocks.al_blocks->next = temp; 
+				temp = temp->next;
+			}
+
+			if(pool_alloc(pool,(void **)&temp->next,
+						sizeof(struct allocated_blocks),1,internal) == -1) {
+				fprintf(stderr,"can't alloc internal memory.\n");
+				return -1;
+			}
+
+			temp->next->block_start = *ptr;
+			temp->next->size = (size * items);
+			temp->next = NULL;
+		}
+
 		return 0;
 	}
 	case i64:
@@ -101,6 +139,36 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 		}
 		(*pool).allocated += (size * items);
 		(*pool).m_free -= (size * items);
+
+		if(!memory_blocks.al_blocks) {	
+			if(pool_alloc(pool,(void **)&memory_blocks.al_blocks,
+						sizeof(struct allocated_blocks),1,internal) == -1) {
+				fprintf(stderr,"can't alloc internal memory.\n");
+				return -1;
+			}
+
+			(memory_blocks.al_blocks)->block_start = *ptr;
+			(memory_blocks.al_blocks)->size = (size * items);
+			(memory_blocks.al_blocks)->next = NULL;
+
+		}else {
+
+			struct allocated_blocks *temp = memory_blocks.al_blocks;
+			while(temp->next){
+				temp = temp->next;
+			}
+
+			if(pool_alloc(pool,(void **)&temp->next,
+						sizeof(struct allocated_blocks),1,internal) == -1) {
+				fprintf(stderr,"can't alloc internal memory.\n");
+				return -1;
+			}
+
+			temp->next->block_start = *ptr;
+			temp->next->size = (size * items);
+			temp->next = NULL;
+		}
+
 		return 0;
 	}
 	case ud:
@@ -121,6 +189,24 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 		(*pool).m_free -= (size * items);
 		return 0;
 	}
+	case internal:
+	{
+		*ptr = (void*)(char*)(*pool).internal_memory + (*pool).allocated_internal;
+
+		if(!is_align(*ptr,size)) {
+			uintptr_t addr =  align((uintptr_t)*ptr, size);
+			if(addr > (uintptr_t)((char*)(*pool).internal_memory + (INT_MEM_SIZE - 1)))
+				return -1;/*you should look for space along the chunk*/
+			
+			*ptr = (void*)addr;
+		} else {
+			*ptr = (char*)(*pool).internal_memory + (*pool).allocated_internal;
+		}
+
+		(*pool).allocated_internal += (size * items);
+		(*pool).m_free_internal -= (size * items);
+		return 0;
+	}
 	default:
 		fprintf(stderr,"type %d not supported.\n",t);
 		return -1;
@@ -129,11 +215,24 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 	return 0;	
 }
 
+int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items, enum type t)
+{
+	
+	if((!pool) || 
+		( size > CHUNK_SIZE ) || 
+		(((*pool).m_free) < size)) return -1;
+
+	return 0;
+
+}
 void pool_destroy(struct m_pool *pool)
 {	
 	free((*pool).chunk);
+	free((*pool).internal_memory);
 	(*pool).m_free = 0;
 	(*pool).allocated = 0;
+	(*pool).m_free_internal = 0;
+	(*pool).allocated_internal = 0;
 }
 
 static int is_align(void *ptr, size_t alignment)

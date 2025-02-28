@@ -27,7 +27,7 @@ int main(void)
 		pool_destroy(&pool);
 		return -1;
 	}
-
+	
 	/*Assign values to the allocated array*/
 	for(int i = 0; i < 5; i++)
 		ptr[i] = i;
