@@ -14,6 +14,7 @@ directories:
 
 clean:
 	rm -r obj/*.o
+	rm *core* 
 	rm $(TARGET)
 
 
