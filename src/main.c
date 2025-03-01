@@ -66,7 +66,7 @@ int main(void)
 			"first int address %p\n"\
 			"value of integer %d\n"\
 			"first address of char array %p.\n"\
-			"value of char %c"
+			"value of char is %c\n"
 			,data,(void*)&data->num,data->num,(void*)&data->s[0],data->s[0]);
 
 	pool_free((void**)&str,5 * sizeof(char),&pool);

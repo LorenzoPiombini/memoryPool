@@ -3,7 +3,7 @@
 
 
 #define CHUNK_SIZE 1048576  /* 1 Mb */
-#define INT_MEM_SIZE 1024*5 /*500 kb*/
+#define INT_MEM_SIZE 1024*500 /*500kb*/
 
 
 enum type{
@@ -33,7 +33,7 @@ struct m_pool{
 struct free_blocks{
 	void* block_start;
 	size_t size;
-	struct free_block_list *next;
+	struct free_blocks *next;
 };
 
 
@@ -51,12 +51,10 @@ struct Meta_data{
 extern struct Meta_data memory_blocks;
 
 
-void pool_free(void **ptr, size_t size, struct m_pool *pool);
+int pool_free(void **ptr, size_t size, struct m_pool *pool);
 void pool_destroy(struct m_pool *pool);
 int pool_init(struct m_pool *pool);
 int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type t);
-/*TODO implement the realloc :
- * needs a struct to keep track of block size*/
 int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items, enum type t);
 
 
