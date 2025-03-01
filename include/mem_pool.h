@@ -48,7 +48,6 @@ struct Meta_data{
 	struct free_blocks *fr_blocks;
 };
 
-extern struct Meta_data memory_blocks;
 
 
 int pool_free(void **ptr, size_t size, struct m_pool *pool);

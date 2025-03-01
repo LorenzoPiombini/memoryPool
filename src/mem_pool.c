@@ -7,11 +7,12 @@
 
 
 /* meta deta from the memory pool */
-struct Meta_data memory_blocks = {0};
+static struct Meta_data memory_blocks = {0};
 
 
 static int is_align(void *ptr, size_t alignment);
 static uintptr_t align(uintptr_t address, size_t alignment);
+static int create_free_block(void** ptr, size_t size, struct m_pool *pool);
 
 int pool_free(void **ptr, size_t size, struct m_pool *pool)
 {
@@ -23,41 +24,8 @@ int pool_free(void **ptr, size_t size, struct m_pool *pool)
 	
 	if(size == 0) return -1;
 
-	memset(*ptr,0,size);
-	(*pool).allocated -= size;
-	(*pool).m_free += size;
-
-	if(!memory_blocks.fr_blocks) {
-		if(pool_alloc(pool,(void **)&memory_blocks.fr_blocks,
-			sizeof(struct free_blocks),1,internal) == -1) {
-			fprintf(stderr,"can't alloc internal memory.\n");
-			return -1;
-		}
-
-		memory_blocks.fr_blocks->block_start = *ptr;
-		memory_blocks.fr_blocks->size = size;
-		memory_blocks.fr_blocks->next = NULL;
-
-
-	} else {
-		struct free_blocks *temp = memory_blocks.fr_blocks->next;
-		struct free_blocks *prev = memory_blocks.fr_blocks;
-
-		while(temp){
-			prev = prev->next;
-			temp = temp->next;
-		}
-
-		if(pool_alloc(pool,(void **)&temp,
-					sizeof(struct allocated_blocks),1,internal) == -1) {
-			fprintf(stderr,"can't alloc internal memory.\n");
-			return -1;
-		}
-
-		temp->block_start = *ptr;
-		temp->size = size;
-		temp->next = NULL;
-		prev->next = temp;
+	if(create_free_block(ptr,size,pool) == -1){
+		return -1;
 	}
 
 	*ptr = NULL;		
@@ -422,3 +390,45 @@ static uintptr_t align(uintptr_t address, size_t alignment)
 }
 
 
+static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
+{
+	memset(*ptr,0,size);
+	(*pool).allocated -= size;
+	(*pool).m_free += size;
+
+	if(!memory_blocks.fr_blocks) {
+		if(pool_alloc(pool,(void **)&memory_blocks.fr_blocks,
+			sizeof(struct free_blocks),1,internal) == -1) {
+			fprintf(stderr,"can't alloc internal memory.\n");
+			return -1;
+		}
+
+		memory_blocks.fr_blocks->block_start = *ptr;
+		memory_blocks.fr_blocks->size = size;
+		memory_blocks.fr_blocks->next = NULL;
+
+
+	} else {
+		struct free_blocks *temp = memory_blocks.fr_blocks->next;
+		struct free_blocks *prev = memory_blocks.fr_blocks;
+
+		while(temp){
+			prev = prev->next;
+			temp = temp->next;
+		}
+
+		if(pool_alloc(pool,(void **)&temp,
+					sizeof(struct allocated_blocks),1,internal) == -1) {
+			fprintf(stderr,"can't alloc internal memory.\n");
+			return -1;
+		}
+
+		temp->block_start = *ptr;
+		temp->size = size;
+		temp->next = NULL;
+		prev->next = temp;
+	}
+
+	return 0;
+
+}
