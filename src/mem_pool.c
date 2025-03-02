@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdalign.h>
 #include "mem_pool.h"
 
@@ -46,7 +47,7 @@ int pool_init(struct m_pool *pool)
 	(*pool).allocated = 0;
 	(*pool).m_free = CHUNK_SIZE;
 	(*pool).allocated_internal = 0;
-	(*pool).m_free_internal = CHUNK_SIZE;
+	(*pool).m_free_internal = INT_MEM_SIZE;
 	(*pool).base_address = (void*)((char*)(*pool).chunk);
 	(*pool).top_address = (void*)((char*)(*pool).chunk + (CHUNK_SIZE - 1));
 
@@ -292,7 +293,10 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 
 			temp_fb = temp_fb->next;
 		}
+		if(!temp_fb){
+			goto check_block_or_create_new_block;
 		
+		}
 		/*
 		 * check if the block is allign with the type t 
 		 * */
@@ -305,8 +309,54 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 				(addr+new_size) > (uintptr_t)((unsigned char*)temp_fb->block_start + (new_size - 1)))
 				goto check_block_or_create_new_block;
 
-		        /*TODO: create new free blocks*/		
 			*ptr = (void*)addr;
+
+		        /* 
+			 * here we create new free blocks
+			 * based on the alignment 
+			 * if the aliginment finds an address within the free block
+			 * we need to create two new free blocks
+			 * */	
+
+			if(temp_fb->block_start < *ptr) {
+				ptrdiff_t free_block_size = ((unsigned char*)*ptr - (unsigned char*)temp_fb->block_start);
+				if(((unsigned char*)temp_fb->block_start + (temp_fb->size - 1)) > ( (unsigned char*)*ptr + (new_size - 1) )) {
+					ptrdiff_t second_free_block_size =  ((unsigned char*)temp_fb->block_start + (temp_fb->size - 1)) - ((unsigned char*)*ptr + (new_size -1 ));
+					if(create_free_block((void**)((unsigned char*)*ptr + new_size), (size_t) second_free_block_size,pool) == -1) {
+						fprintf(stderr,"can't create free blocks metadata.\n");
+						return -1;
+					}
+				}
+				
+				temp_fb->size = free_block_size; 
+				
+				/*copy the memory to the new found block*/
+				memcpy(*ptr,temp->block_start,temp->size);
+
+				/*updte the pool allocation values*/
+				(*pool).allocated += (new_size - temp->size);
+				(*pool).m_free -= (new_size - temp->size);
+
+				/*the originally allocated block becomes free so we create a free block from it*/
+				if(create_free_block(&temp->block_start,temp->size,pool) == -1) {
+					fprintf(stderr,"can't create free blocks metadata.\n");
+					return -1;
+				}
+
+				/*update the allocated block with the new address*/
+				temp->block_start = *ptr;
+
+				/*set the pointer to the first address of the reallocated memory*/
+				*ptr = (unsigned char*)*ptr + temp->size;
+				/*update the size of the new block */
+				temp->size = new_size;
+
+			} else if(temp_fb->block_start == *ptr) {
+				if(((unsigned char*)*ptr + new_size) < ((unsigned char*)temp_fb->block_start + (temp_fb->size - 1))){
+					temp_fb->block_start = (void*)(unsigned char*)*ptr + (new_size - 1);
+					temp_fb->size = (size_t)(((unsigned char*)temp_fb->block_start +  (temp_fb->size - 1) ) - ((unsigned char*)*ptr + (new_size - 1)));
+				}
+			}			
 		}
 
 		memcpy(temp_fb->block_start,temp->block_start,temp->size);
@@ -320,14 +370,14 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 		temp->block_start = help;
 		temp_fb->size = temp->size;
 		temp->size = new_size;
-		/*set the ointer to the new allocated block */
+		/*set the pointer to the new allocated block */
 		*ptr = (unsigned char*)temp->block_start + temp_fb->size;
 		return 0;
 	}
 
 	/*
-	 * find a new block in the pool 
 	 * - check if we can expand this block 
+	 * or find a new block in the pool 
 	 * */
 
 	check_block_or_create_new_block:
