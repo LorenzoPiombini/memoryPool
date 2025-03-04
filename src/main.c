@@ -17,6 +17,7 @@ int main(void)
 		return -1;
 	}
 
+	/*only for dev porpuses*/
 	printf("base address is %p\n", (void*)pool.base_address);
 	printf("top address is %p\n", (void*)pool.top_address);
 
@@ -32,12 +33,7 @@ int main(void)
 	for(int i = 0; i < 5; i++)
 		ptr[i] = i;
 
-	/* print the data  */
-	for(int i = 0; i < 5; i++)
-		printf("int a index %d in the array is: %d, address: %p.\n",i,ptr[i],(void*)&ptr[i]);
-
-
-
+	
 
 	/*assign a string of 5 chars*/
 	char *str = NULL;
@@ -48,8 +44,21 @@ int main(void)
 	}
 
 	strncpy(str,"ciao!!",7);
-	printf("\n\n\nwe allocated a string of 7 bytes: %s\nfirst addres of string is %p.\n",str,(void*)&str[0]); 
-	
+	printf("\nwe allocated a string of 7 bytes: %s\nfirst addres of string is %p.\n",str,(void*)&str[0]); 
+
+	/*expand the array to 7 integers*/
+	if(pool_realloc(&pool,(void**)&ptr,sizeof(int),2,i32) == -1){
+		fprintf(stderr,"can't realloc memory.\n");
+		return 0;
+	}
+
+	for(int i = 5 ; i < 7;i++)
+		ptr[i] = i;
+
+	/* print the data  */
+	for(int i = 0; i < 7; i++)
+		printf("int a index %d in the array is: %d, address: %p.\n",i,ptr[i],(void*)&ptr[i]);
+
 	/*allocate memory for the struct My_struct*/
 	struct My_struct *data = NULL;
 	if(pool_alloc(&pool, (void**)&data,sizeof(struct My_struct),1,ud) == -1 ){

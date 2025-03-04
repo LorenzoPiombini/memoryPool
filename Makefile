@@ -19,8 +19,8 @@ clean:
 
 
 $(TARGET) : $(OBJ)
-	gcc -o $@ $?  
+	gcc -o $@ $?  -fsanitize=address
 
 
 obj/%.o : src/%.c
-	gcc -g3 -Wall -Wextra -c $< -o $@ -Iinclude 
+	gcc -g3 -Wall -Wextra -c $< -o $@ -Iinclude -fsanitize=address

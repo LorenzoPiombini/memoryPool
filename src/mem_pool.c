@@ -13,7 +13,9 @@ static struct Meta_data memory_blocks = {0};
 
 static int is_align(void *ptr, size_t alignment);
 static uintptr_t align(uintptr_t address, size_t alignment);
+static void free_pool_internal(struct m_pool *pool, void** ptr, size_t size);
 static int create_free_block(void** ptr, size_t size, struct m_pool *pool);
+static int destroy_allocated_block(void** ptr, struct m_pool *pool);
 
 int pool_free(void **ptr, size_t size, struct m_pool *pool)
 {
@@ -25,29 +27,31 @@ int pool_free(void **ptr, size_t size, struct m_pool *pool)
 	
 	if(size == 0) return -1;
 
-	if(create_free_block(ptr,size,pool) == -1){
-		return -1;
-	}
-
-	*ptr = NULL;		
+	memset(*ptr,0,size);
+	(*pool).allocated -= size;
+	(*pool).m_free += size;
 	return 0;
 }
 
 int pool_init(struct m_pool *pool)
 {
 	(*pool).chunk = (void*) malloc(CHUNK_SIZE);
-	(*pool).internal_memory = (void*) malloc(INT_MEM_SIZE);
-	if(!(*pool).chunk || !(*pool).internal_memory){
+	(*pool).alloc_internal_memory = (void*) malloc(INT_MEM_SIZE);
+	(*pool).free_internal_memory = (void*) malloc(INT_MEM_SIZE);
+	if(!(*pool).chunk || !(*pool).alloc_internal_memory || !(*pool).free_internal_memory){
 		fprintf(stderr,"%s() failed.\n",__func__);
 		return -1;
 	}
 
-	memset(((*pool).chunk),0,CHUNK_SIZE);
-	memset(((*pool).internal_memory),0,INT_MEM_SIZE);
+	memset((*pool).chunk,0,CHUNK_SIZE);
+	memset((*pool).alloc_internal_memory,0,INT_MEM_SIZE);
+	memset((*pool).free_internal_memory,0,INT_MEM_SIZE);
+
 	(*pool).allocated = 0;
 	(*pool).m_free = CHUNK_SIZE;
 	(*pool).allocated_internal = 0;
-	(*pool).m_free_internal = INT_MEM_SIZE;
+	(*pool).m_free_internal = 0;
+
 	(*pool).base_address = (void*)((char*)(*pool).chunk);
 	(*pool).top_address = (void*)((char*)(*pool).chunk + (CHUNK_SIZE - 1));
 
@@ -81,13 +85,13 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 		
 		if(!memory_blocks.al_blocks) {	
 			if(pool_alloc(pool,(void **)&memory_blocks.al_blocks,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
 
 			memory_blocks.al_blocks->block_start = *ptr;
-			memory_blocks.al_blocks->size = (size * items);
+			memory_blocks.al_blocks->size = size * items;
 			memory_blocks.al_blocks->next = NULL;
 
 		}else {
@@ -101,7 +105,7 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 			}
 
 			if(pool_alloc(pool,(void **)&temp,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
@@ -146,17 +150,16 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 		
 		if(!memory_blocks.al_blocks) {	
 			if(pool_alloc(pool,(void **)&memory_blocks.al_blocks,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
 
 			memory_blocks.al_blocks->block_start = *ptr;
-			memory_blocks.al_blocks->size = (size * items);
+			memory_blocks.al_blocks->size = size * items;
 			memory_blocks.al_blocks->next = NULL;
 
 		}else {
-
 			struct allocated_blocks *temp = memory_blocks.al_blocks->next;
 			struct allocated_blocks *prev = memory_blocks.al_blocks;
 
@@ -166,7 +169,7 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 			}
 
 			if(pool_alloc(pool,(void **)&temp,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
@@ -175,6 +178,8 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 			temp->size = (size * items);
 			temp->next = NULL;
 			prev->next = temp;
+
+
 		}
 
 		return 0;
@@ -197,7 +202,7 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 
 		if(!memory_blocks.al_blocks) {	
 			if(pool_alloc(pool,(void **)&memory_blocks.al_blocks,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
@@ -211,13 +216,15 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 			struct allocated_blocks *temp = memory_blocks.al_blocks->next;
 			struct allocated_blocks *prev = memory_blocks.al_blocks;
 
+			int counter = 0;
 			while(temp){
+				printf("iter nr %d.\n",++counter);
 				temp = temp->next;
 				prev = prev->next; 
 			}
 
 			if(pool_alloc(pool,(void **)&temp,
-						sizeof(struct allocated_blocks),1,internal) == -1) {
+						sizeof(struct allocated_blocks),1,inter_alloc) == -1) {
 				fprintf(stderr,"can't alloc internal memory.\n");
 				return -1;
 			}
@@ -230,28 +237,43 @@ int pool_alloc(struct m_pool *pool, void **ptr, size_t size,int items, enum type
 
 		return 0;
 	}
-	case internal:
+	case inter_alloc:
 	{
 		if(size > INT_MEM_SIZE || 
 				(size * items) > INT_MEM_SIZE ||
-				(size * items) > (*pool).m_free_internal) return -1;
+				(size * items) > (INT_MEM_SIZE - (*pool).allocated_internal)) return -1;
 
-		*ptr = (void*)(char*)(*pool).internal_memory + (*pool).allocated_internal;
-
+		*ptr = (void*)((char*)(*pool).alloc_internal_memory + (*pool).allocated_internal);
 		if(!is_align(*ptr,size)) {
 			uintptr_t addr =  align((uintptr_t)*ptr, size);
-			if(addr > (uintptr_t)((char*)(*pool).internal_memory + (INT_MEM_SIZE - 1)))
+			if(addr > (uintptr_t)((char*)(*pool).alloc_internal_memory + (INT_MEM_SIZE - 1)))
 				return -1;/*you should look for space along the chunk*/
 			
 			*ptr = (void*)addr;
-		} else {
-			*ptr = (char*)(*pool).internal_memory + (*pool).allocated_internal;
 		}
 
 		(*pool).allocated_internal += (size * items);
-		(*pool).m_free_internal -= (size * items);
 		return 0;
 	}
+	case inter_free:
+	{
+		if(size > INT_MEM_SIZE || 
+				(size * items) > INT_MEM_SIZE ||
+				(size * items) > (INT_MEM_SIZE - (*pool).m_free_internal)) return -1;
+
+		*ptr = (void*)((char*)(*pool).free_internal_memory + (*pool).m_free_internal);
+		if(!is_align(*ptr,size)) {
+			uintptr_t addr =  align((uintptr_t)*ptr, size);
+			if(addr > (uintptr_t)((char*)(*pool).free_internal_memory + (INT_MEM_SIZE - 1)))
+				return -1;/*you should look for space along the chunk*/
+			
+			*ptr = (void*)addr;
+		}
+
+		(*pool).m_free_internal += (size * items);
+		return 0;
+	}
+
 	default:
 		fprintf(stderr,"type %d not supported.\n",t);
 		return -1;
@@ -284,7 +306,7 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 
 	size_t new_size = temp->size + (size * extend_items);
 
-	/*look for big enough free blokcs*/
+	/*look for a big enough free blokcs*/
 	if(memory_blocks.fr_blocks) {
 		struct free_blocks *temp_fb = memory_blocks.fr_blocks;
 		while(temp_fb){
@@ -293,6 +315,7 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 
 			temp_fb = temp_fb->next;
 		}
+
 		if(!temp_fb){
 			goto check_block_or_create_new_block;
 		
@@ -353,12 +376,36 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 
 			} else if(temp_fb->block_start == *ptr) {
 				if(((unsigned char*)*ptr + new_size) < ((unsigned char*)temp_fb->block_start + (temp_fb->size - 1))){
-					temp_fb->block_start = (void*)(unsigned char*)*ptr + (new_size - 1);
-					temp_fb->size = (size_t)(((unsigned char*)temp_fb->block_start +  (temp_fb->size - 1) ) - ((unsigned char*)*ptr + (new_size - 1)));
+					temp_fb->block_start = (void*)(unsigned char*)*ptr + new_size;
+					temp_fb->size = temp_fb->size - new_size;
+
+					/*copy the memory to the new found block*/
+					memcpy(*ptr,temp->block_start,temp->size);
+
+					/*updte the pool allocation values*/
+					(*pool).allocated += (new_size - temp->size);
+					(*pool).m_free -= (new_size - temp->size);
+
+					/*the originally allocated block becomes free so we create a free block from it*/
+					if(create_free_block(&temp->block_start,temp->size,pool) == -1) {
+						fprintf(stderr,"can't create free blocks metadata.\n");
+						return -1;
+					}
+
+					/*update the allocated block with the new address*/
+					temp->block_start = *ptr;
+
+					/*set the pointer to the first address of the reallocated memory*/
+					*ptr = (unsigned char*)*ptr + temp->size;
+					/*update the size of the new block */
+					temp->size = new_size;
+					
+					return 0;
 				}
 			}			
 		}
 
+		/*alignment is good */
 		memcpy(temp_fb->block_start,temp->block_start,temp->size);
 		/*updte the pool allocation values*/
 		(*pool).allocated += (new_size - temp->size);
@@ -381,16 +428,16 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 	 * */
 
 	check_block_or_create_new_block:
-	unsigned char *end = (unsigned char*)temp->block_start + new_size;
-	unsigned char *start = (unsigned char*)temp->block_start;
-	for(;start < end; start++)
+	unsigned char *end = (unsigned char*)temp->block_start + (new_size - 1);
+	unsigned char *start = (unsigned char*)temp->block_start + temp->size;
+	for(;start < end; start++){
 		if(*start != 0)
 			break;
+	}
 
-	if(start == (end - 1) && *start == 0){
+	if(start == end  && *start == 0){
 		/*we have enough space to expand this block */
 		/* set the pointer to the first block of the new allocated block */
-		*ptr = (unsigned char*)temp->block_start + temp->size;
 		(*pool).allocated += (new_size - temp->size);
 		(*pool).m_free -= (new_size - temp->size);
 		temp->size = new_size;
@@ -398,7 +445,7 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 	}
 
 	/*here we have to find a new block */
-	if(pool_alloc(pool,ptr,size,extend_items,t) == -1){
+	if(pool_alloc(pool,ptr,size,new_size/size,t) == -1){
 		fprintf(stderr,"can't realloc memory.\n");
 		return -1;
 	}
@@ -406,23 +453,24 @@ int pool_realloc(struct m_pool *pool, void **ptr, size_t size, int extend_items,
 	/*copy existing block to new one*/
 	memcpy(*ptr,temp->block_start,temp->size);
 
-	if(pool_free(temp->block_start,temp->size,pool) == -1){
+	if(pool_free(&temp->block_start,temp->size,pool) == -1){
 		fprintf(stderr,"can't free block starting at %p",temp->block_start);
 		return -1;
 	}
 
-	temp->block_start = *ptr;
-	*ptr = (unsigned char*)ptr + temp->size;
-	temp->size = new_size;
-	(*pool).allocated += new_size;
-	(*pool).m_free -= new_size;
+	if(create_free_block(&temp->block_start, temp->size, pool) == -1){
+		fprintf(stderr,"can't create free block starting at %p",temp->block_start);
+		return 1;
+	}
 	return 0;
-
 }
+
 void pool_destroy(struct m_pool *pool)
 {	
 	free((*pool).chunk);
-	free((*pool).internal_memory);
+	free((*pool).alloc_internal_memory);
+	free((*pool).free_internal_memory);
+
 	(*pool).m_free = 0;
 	(*pool).allocated = 0;
 	(*pool).m_free_internal = 0;
@@ -442,13 +490,10 @@ static uintptr_t align(uintptr_t address, size_t alignment)
 
 static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
 {
-	memset(*ptr,0,size);
-	(*pool).allocated -= size;
-	(*pool).m_free += size;
 
 	if(!memory_blocks.fr_blocks) {
 		if(pool_alloc(pool,(void **)&memory_blocks.fr_blocks,
-			sizeof(struct free_blocks),1,internal) == -1) {
+			sizeof(struct free_blocks),1,inter_free) == -1) {
 			fprintf(stderr,"can't alloc internal memory.\n");
 			return -1;
 		}
@@ -463,12 +508,12 @@ static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
 		struct free_blocks *prev = memory_blocks.fr_blocks;
 
 		while(temp){
-			prev = prev->next;
 			temp = temp->next;
+			prev = prev->next;
 		}
 
 		if(pool_alloc(pool,(void **)&temp,
-					sizeof(struct allocated_blocks),1,internal) == -1) {
+					sizeof(struct allocated_blocks),1,inter_free) == -1) {
 			fprintf(stderr,"can't alloc internal memory.\n");
 			return -1;
 		}
@@ -479,6 +524,51 @@ static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
 		prev->next = temp;
 	}
 
+	if(destroy_allocated_block(ptr,pool) == -1){
+		fprintf(stderr,"block not found");
+		return -1;
+	}
+
 	return 0;
 
+}
+
+static void free_pool_internal(struct m_pool *pool, void **ptr, size_t size)
+{
+	memset(*ptr,0,size);
+	(*pool).allocated_internal -= size;
+	(*pool).m_free_internal += size;
+}
+
+static int destroy_allocated_block(void** ptr, struct m_pool *pool)
+{
+	struct allocated_blocks *temp = memory_blocks.al_blocks;
+	if(!temp) return 0;
+
+
+	if(temp->block_start == *ptr) {
+		memory_blocks.al_blocks = temp->next;
+		temp->next = NULL;
+		free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks));
+		return 0;
+			
+	}
+
+	temp = temp->next;
+	struct allocated_blocks *prev = memory_blocks.al_blocks;
+	while(temp) {
+
+		if(temp->block_start == *ptr)
+			break;
+
+		temp = temp->next;
+		prev= prev->next;
+	}
+
+	if(!temp) return 0;
+
+	prev->next = prev->next->next;
+	temp->next =NULL;
+	free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks));
+	return 0;
 }

@@ -14,12 +14,14 @@ enum type{
 	f64,
 	s,
 	ud,/*user defined data like struct */
-	internal	
+	inter_alloc,
+	inter_free	
 };
 
 struct m_pool{
 	void* chunk;
-	void* internal_memory;
+	void* alloc_internal_memory;
+	void* free_internal_memory;
 	void* base_address;
 	void* top_address;
 	size_t m_free;
