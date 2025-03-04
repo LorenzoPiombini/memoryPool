@@ -13,9 +13,9 @@ static struct Meta_data memory_blocks = {0};
 
 static int is_align(void *ptr, size_t alignment);
 static uintptr_t align(uintptr_t address, size_t alignment);
-static void free_pool_internal(struct m_pool *pool, void** ptr, size_t size);
 static int create_free_block(void** ptr, size_t size, struct m_pool *pool);
-static int destroy_allocated_block(void** ptr, struct m_pool *pool);
+static void free_pool_internal(struct m_pool *pool, void **ptr, size_t size, enum type t);
+static int destroy_block(void** ptr, struct m_pool *pool,enum type t);
 
 int pool_free(void **ptr, size_t size, struct m_pool *pool)
 {
@@ -524,7 +524,7 @@ static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
 		prev->next = temp;
 	}
 
-	if(destroy_allocated_block(ptr,pool) == -1){
+	if(destroy_block(ptr,pool,inter_alloc) == -1){
 		fprintf(stderr,"block not found");
 		return -1;
 	}
@@ -533,42 +533,90 @@ static int create_free_block(void** ptr, size_t size, struct m_pool *pool)
 
 }
 
-static void free_pool_internal(struct m_pool *pool, void **ptr, size_t size)
+static void free_pool_internal(struct m_pool *pool, void **ptr, size_t size, enum type t)
 {
 	memset(*ptr,0,size);
-	(*pool).allocated_internal -= size;
-	(*pool).m_free_internal += size;
+	switch(t){
+	case inter_alloc:
+		(*pool).allocated_internal -= size;
+		break;
+	case inter_free:	
+		(*pool).m_free_internal -= size;
+		break;
+	default:
+		break;
+	}
 }
 
-static int destroy_allocated_block(void** ptr, struct m_pool *pool)
+static int destroy_block(void** ptr, struct m_pool *pool,enum type t)
 {
-	struct allocated_blocks *temp = memory_blocks.al_blocks;
-	if(!temp) return 0;
+	switch(t) {
+	case inter_alloc:
+	{
+		struct allocated_blocks *temp = memory_blocks.al_blocks;
+		if(!temp) return 0;
 
 
-	if(temp->block_start == *ptr) {
-		memory_blocks.al_blocks = temp->next;
-		temp->next = NULL;
-		free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks));
-		return 0;
-			
-	}
+		if(temp->block_start == *ptr) {
+			memory_blocks.al_blocks = temp->next;
+			temp->next = NULL;
+			free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks),t);
+			return 0;
 
-	temp = temp->next;
-	struct allocated_blocks *prev = memory_blocks.al_blocks;
-	while(temp) {
-
-		if(temp->block_start == *ptr)
-			break;
+		}
 
 		temp = temp->next;
-		prev= prev->next;
+		struct allocated_blocks *prev = memory_blocks.al_blocks;
+		while(temp) {
+
+			if(temp->block_start == *ptr)
+				break;
+
+			temp = temp->next;
+			prev= prev->next;
+		}
+
+		if(!temp) return 0;
+
+		prev->next = prev->next->next;
+		temp->next =NULL;
+		free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks),t);
+		return 0;
 	}
+	case inter_free:
+	{
+		struct free_blocks *temp = memory_blocks.fr_blocks;
+		if(!temp) return 0;
 
-	if(!temp) return 0;
 
-	prev->next = prev->next->next;
-	temp->next =NULL;
-	free_pool_internal(pool,(void**)&temp,sizeof(struct allocated_blocks));
-	return 0;
+		if(temp->block_start == *ptr) {
+			memory_blocks.fr_blocks = temp->next;
+			temp->next = NULL;
+			free_pool_internal(pool,(void**)&temp,sizeof(struct free_blocks),t);
+			return 0;
+
+		}
+
+		temp = temp->next;
+		struct free_blocks *prev = memory_blocks.fr_blocks;
+		while(temp) {
+
+			if(temp->block_start == *ptr)
+				break;
+
+			temp = temp->next;
+			prev= prev->next;
+		}
+
+		if(!temp) return 0;
+
+		prev->next = prev->next->next;
+		temp->next =NULL;
+		free_pool_internal(pool,(void**)&temp,sizeof(struct free_blocks),t);
+		return 0;
+	}
+	default:
+		return 0;
+	}
+	
 }
