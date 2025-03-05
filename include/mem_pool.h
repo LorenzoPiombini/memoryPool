@@ -51,6 +51,7 @@ struct Meta_data{
 };
 
 
+extern struct Meta_data memory_blocks; 
 
 int pool_free(void **ptr, size_t size, struct m_pool *pool);
 void pool_destroy(struct m_pool *pool);

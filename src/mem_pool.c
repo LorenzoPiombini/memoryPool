@@ -8,7 +8,7 @@
 
 
 /* meta deta from the memory pool */
-static struct Meta_data memory_blocks = {0};
+struct Meta_data memory_blocks = {0};
 
 
 static int is_align(void *ptr, size_t alignment);
